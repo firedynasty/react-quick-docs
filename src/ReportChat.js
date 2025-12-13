@@ -742,11 +742,6 @@ ${content}
     }
   };
 
-  // Get total character count
-  const getTotalCharCount = () => {
-    return Object.values(loadedReports).reduce((sum, content) => sum + content.length, 0);
-  };
-
   return (
     <div style={styles.container}>
       {/* Header / Sidebar */}
