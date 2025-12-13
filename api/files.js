@@ -1,10 +1,9 @@
-// Vercel Serverless Function for File Storage with KV
+// Vercel Serverless Function for File Storage with Blob
 // Environment variables (set in Vercel dashboard):
-// - KV_REST_API_URL: Vercel KV REST API URL
-// - KV_REST_API_TOKEN: Vercel KV REST API Token
+// - BLOB_READ_WRITE_TOKEN: Vercel Blob token (auto-added when you create a Blob store)
 // - ACCESS_CODE: Password to unlock edit/save operations
 
-import { kv } from '@vercel/kv';
+import { put, list, del } from '@vercel/blob';
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -19,9 +18,24 @@ export default async function handler(req, res) {
   }
 
   try {
-    // GET - List all files (no auth required)
+    // GET - List all files and their contents (no auth required)
     if (req.method === 'GET') {
-      const files = await kv.get('files') || {};
+      const { blobs } = await list({ prefix: 'docs/' });
+
+      // Fetch content for each blob
+      const files = {};
+      for (const blob of blobs) {
+        try {
+          const response = await fetch(blob.url);
+          const content = await response.text();
+          // Remove 'docs/' prefix from pathname for display
+          const filename = blob.pathname.replace('docs/', '');
+          files[filename] = content;
+        } catch (err) {
+          console.error(`Error fetching ${blob.pathname}:`, err);
+        }
+      }
+
       return res.status(200).json({ files });
     }
 
@@ -44,13 +58,14 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Content is required' });
       }
 
-      // Get existing files and update
-      const files = await kv.get('files') || {};
-      files[filename] = content;
-      await kv.set('files', files);
+      // Save to Blob with 'docs/' prefix
+      const blob = await put(`docs/${filename}`, content, {
+        access: 'public',
+        addRandomSuffix: false, // Keep exact filename
+      });
 
       console.log(`File saved: ${filename} (${content.length} chars)`);
-      return res.status(200).json({ success: true, filename });
+      return res.status(200).json({ success: true, filename, url: blob.url });
     }
 
     // DELETE - Remove a file (requires access code)
@@ -69,15 +84,16 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Filename is required' });
       }
 
-      // Get existing files and delete
-      const files = await kv.get('files') || {};
+      // Find the blob URL first
+      const { blobs } = await list({ prefix: `docs/${filename}` });
+      const blob = blobs.find(b => b.pathname === `docs/${filename}`);
 
-      if (!files[filename]) {
+      if (!blob) {
         return res.status(404).json({ error: 'File not found' });
       }
 
-      delete files[filename];
-      await kv.set('files', files);
+      // Delete the blob
+      await del(blob.url);
 
       console.log(`File deleted: ${filename}`);
       return res.status(200).json({ success: true, filename });
@@ -87,7 +103,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
 
   } catch (error) {
-    console.error('KV API error:', error);
+    console.error('Blob API error:', error);
     return res.status(500).json({ error: error.message || 'Internal server error' });
   }
 }
