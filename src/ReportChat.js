@@ -16,7 +16,7 @@ const DocumentEditor = () => {
   const [fontSize, setFontSize] = useState(16);
   const [darkMode, setDarkMode] = useState(true);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [showPasswordOverlay, setShowPasswordOverlay] = useState(false);
+  const [showPasswordOverlay, setShowPasswordOverlay] = useState(true); // Show on load to protect content
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [showSidebar, setShowSidebar] = useState(false);
@@ -29,6 +29,13 @@ const DocumentEditor = () => {
     loadFiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-focus password input on mount
+  useEffect(() => {
+    if (showPasswordOverlay && passwordInputRef.current) {
+      passwordInputRef.current.focus();
+    }
+  }, [showPasswordOverlay]);
 
   // Load files from API
   const loadFiles = async () => {
@@ -285,12 +292,6 @@ const DocumentEditor = () => {
             <button onClick={checkPassword} style={styles.passwordSubmitBtn}>
               Submit
             </button>
-            <button
-              onClick={() => setShowPasswordOverlay(false)}
-              style={styles.passwordCancelBtn}
-            >
-              Cancel
-            </button>
             <div style={styles.passwordError}>{passwordError}</div>
           </div>
         </div>
@@ -387,7 +388,10 @@ const DocumentEditor = () => {
           {!showSidebar && (
             <button
               onClick={() => setShowSidebar(true)}
-              style={styles.hamburgerBtn}
+              style={{
+                ...styles.hamburgerBtn,
+                color: darkMode ? '#fff' : '#333',
+              }}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 6h16M4 12h16M4 18h16" />
@@ -565,17 +569,6 @@ const styles = {
     padding: '12px 30px',
     fontSize: '16px',
     background: '#4a90e2',
-    color: 'white',
-    border: 'none',
-    borderRadius: '5px',
-    cursor: 'pointer',
-    marginRight: '10px',
-  },
-  passwordCancelBtn: {
-    marginTop: '15px',
-    padding: '12px 30px',
-    fontSize: '16px',
-    background: '#666',
     color: 'white',
     border: 'none',
     borderRadius: '5px',
