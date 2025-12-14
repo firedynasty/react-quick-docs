@@ -16,8 +16,13 @@ const DocumentEditor = () => {
   const [fontSize, setFontSize] = useState(16);
   const [darkMode, setDarkMode] = useState(true);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showPasswordOverlay, setShowPasswordOverlay] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [showSidebar, setShowSidebar] = useState(false);
 
   const textareaRef = useRef(null);
+  const passwordInputRef = useRef(null);
 
   // Load files on mount
   useEffect(() => {
@@ -46,19 +51,60 @@ const DocumentEditor = () => {
     }
   };
 
-  // Authenticate with access code
-  const authenticate = () => {
-    const code = prompt('Enter access code to enable editing:');
-    if (code) {
-      setAccessCode(code);
+  // Simple hash function for password obfuscation
+  const simpleHash = (str) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return ((hash >>> 0) * 31 + 17).toString(36);
+  };
+
+  const validHash = 'ulad1fc'; // Hash of the password
+
+  // Show password overlay
+  const showPasswordPrompt = () => {
+    setShowPasswordOverlay(true);
+    setPasswordInput('');
+    setPasswordError('');
+    setTimeout(() => {
+      if (passwordInputRef.current) {
+        passwordInputRef.current.focus();
+      }
+    }, 100);
+  };
+
+  // Check password
+  const checkPassword = () => {
+    const hash = simpleHash(passwordInput);
+    if (hash === validHash) {
+      setAccessCode(passwordInput);
       setIsAuthenticated(true);
+      setShowPasswordOverlay(false);
+      setPasswordError('');
+      setPasswordInput('');
+    } else {
+      setPasswordError('Incorrect password. Please try again.');
+      setPasswordInput('');
+      if (passwordInputRef.current) {
+        passwordInputRef.current.focus();
+      }
+    }
+  };
+
+  // Handle password input key press
+  const handlePasswordKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      checkPassword();
     }
   };
 
   // Create new file
   const createNewFile = () => {
     if (!isAuthenticated) {
-      authenticate();
+      showPasswordPrompt();
       return;
     }
 
@@ -96,12 +142,13 @@ const DocumentEditor = () => {
     setSelectedFile(filename);
     setIsEditing(false);
     setHasUnsavedChanges(false);
+    setShowSidebar(false); // Close sidebar after selection
   };
 
   // Enter edit mode
   const enterEditMode = () => {
     if (!isAuthenticated) {
-      authenticate();
+      showPasswordPrompt();
       return;
     }
     if (!selectedFile) return;
@@ -174,7 +221,7 @@ const DocumentEditor = () => {
   // Delete file
   const deleteFile = async (filename) => {
     if (!isAuthenticated) {
-      authenticate();
+      showPasswordPrompt();
       return;
     }
 
@@ -219,81 +266,112 @@ const DocumentEditor = () => {
 
   return (
     <div style={styles.container}>
+      {/* Password Overlay */}
+      {showPasswordOverlay && (
+        <div style={styles.passwordOverlay}>
+          <div style={styles.passwordContainer}>
+            <h2 style={styles.passwordTitle}>Enter Password</h2>
+            <input
+              ref={passwordInputRef}
+              type="password"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              onKeyPress={handlePasswordKeyPress}
+              placeholder="Password"
+              autoComplete="off"
+              style={styles.passwordInputField}
+            />
+            <br />
+            <button onClick={checkPassword} style={styles.passwordSubmitBtn}>
+              Submit
+            </button>
+            <button
+              onClick={() => setShowPasswordOverlay(false)}
+              style={styles.passwordCancelBtn}
+            >
+              Cancel
+            </button>
+            <div style={styles.passwordError}>{passwordError}</div>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar */}
-      <div style={{
-        ...styles.sidebar,
-        background: darkMode ? '#1a1a2e' : '#f5f5f5',
-      }}>
+      {showSidebar && (
         <div style={{
-          ...styles.sidebarHeader,
-          background: darkMode ? '#0d0d1a' : '#e0e0e0',
-          color: darkMode ? '#4da6ff' : '#333',
+          ...styles.sidebar,
+          background: darkMode ? '#1a1a2e' : '#f5f5f5',
         }}>
-          DOCUMENTS
-        </div>
+          <div style={{
+            ...styles.sidebarHeader,
+            background: darkMode ? '#0d0d1a' : '#e0e0e0',
+            color: darkMode ? '#4da6ff' : '#333',
+          }}>
+            <span>DOCUMENTS</span>
+            {/* Close sidebar button */}
+            <button
+              onClick={() => setShowSidebar(false)}
+              style={styles.closeSidebarBtn}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
 
-        {/* New File Button */}
-        <button
-          onClick={createNewFile}
-          style={styles.newFileBtn}
-        >
-          + New File
-        </button>
-
-        {/* Auth Status */}
-        {!isAuthenticated && (
+          {/* New File Button */}
           <button
-            onClick={authenticate}
-            style={styles.authBtn}
+            onClick={createNewFile}
+            style={styles.newFileBtn}
           >
-            Unlock Editing
+            + New File
           </button>
-        )}
 
-        {/* Files List */}
-        <div style={styles.filesList}>
-          {isLoading ? (
-            <div style={{ padding: '20px', color: darkMode ? '#888' : '#666' }}>
-              Loading...
-            </div>
-          ) : sortedFilenames.length === 0 ? (
-            <div style={{ padding: '20px', color: darkMode ? '#888' : '#666' }}>
-              No files yet
-            </div>
-          ) : (
-            sortedFilenames.map((filename) => (
-              <div
-                key={filename}
-                style={{
-                  ...styles.fileItem,
-                  background: selectedFile === filename
-                    ? (darkMode ? '#3a3a5a' : '#d0d0d0')
-                    : 'transparent',
-                }}
-                onClick={() => selectFile(filename)}
-              >
-                <span style={{
-                  ...styles.fileName,
-                  color: darkMode ? '#e0e0e0' : '#333',
-                }}>
-                  {filename}
-                </span>
-                <span style={styles.fileSize}>
-                  {(files[filename]?.length || 0).toLocaleString()} chars
-                </span>
+          {/* Files List */}
+          <div style={styles.filesList}>
+            {isLoading ? (
+              <div style={{ padding: '20px', color: darkMode ? '#888' : '#666' }}>
+                Loading...
               </div>
-            ))
-          )}
-        </div>
+            ) : sortedFilenames.length === 0 ? (
+              <div style={{ padding: '20px', color: darkMode ? '#888' : '#666' }}>
+                No files yet
+              </div>
+            ) : (
+              sortedFilenames.map((filename) => (
+                <div
+                  key={filename}
+                  style={{
+                    ...styles.fileItem,
+                    background: selectedFile === filename
+                      ? (darkMode ? '#3a3a5a' : '#d0d0d0')
+                      : 'transparent',
+                  }}
+                  onClick={() => selectFile(filename)}
+                >
+                  <span style={{
+                    ...styles.fileName,
+                    color: darkMode ? '#e0e0e0' : '#333',
+                  }}>
+                    {filename}
+                  </span>
+                  <span style={styles.fileSize}>
+                    {(files[filename]?.length || 0).toLocaleString()} chars
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
 
-        {/* Refresh Button */}
-        <button
-          onClick={loadFiles}
-          style={styles.refreshBtn}
-        >
-          Refresh
-        </button>
-      </div>
+          {/* Refresh Button */}
+          <button
+            onClick={loadFiles}
+            style={styles.refreshBtn}
+          >
+            Refresh
+          </button>
+        </div>
+      )}
 
       {/* Main Area */}
       <div style={{
@@ -305,6 +383,18 @@ const DocumentEditor = () => {
           ...styles.controlBar,
           background: darkMode ? 'rgba(0, 0, 0, 0.8)' : '#e0e0e0',
         }}>
+          {/* Hamburger menu button */}
+          {!showSidebar && (
+            <button
+              onClick={() => setShowSidebar(true)}
+              style={styles.hamburgerBtn}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          )}
+
           <span style={{
             ...styles.currentFileName,
             color: darkMode ? '#fff' : '#333',
@@ -314,6 +404,22 @@ const DocumentEditor = () => {
           </span>
 
           <div style={styles.controls}>
+            {/* Copy Button */}
+            <button
+              onClick={() => {
+                if (selectedFile && files[selectedFile]) {
+                  navigator.clipboard.writeText(files[selectedFile]);
+                }
+              }}
+              disabled={!selectedFile}
+              style={{
+                ...styles.copyBtn,
+                opacity: !selectedFile ? 0.5 : 1,
+              }}
+            >
+              Copy
+            </button>
+
             {/* Edit/Save/Cancel Buttons */}
             {!isEditing ? (
               <button
@@ -354,13 +460,7 @@ const DocumentEditor = () => {
               </button>
             )}
 
-            {/* Font Size Controls */}
-            <button
-              onClick={() => changeFontSize(-2)}
-              style={styles.fontBtn}
-            >
-              -
-            </button>
+            {/* Font Size Increase */}
             <button
               onClick={() => changeFontSize(2)}
               style={styles.fontBtn}
@@ -425,19 +525,110 @@ const styles = {
     height: '100vh',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   },
+  passwordOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    background: 'rgba(0, 0, 0, 0.95)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  passwordContainer: {
+    background: '#1a1a1a',
+    padding: '40px',
+    borderRadius: '10px',
+    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
+    textAlign: 'center',
+  },
+  passwordTitle: {
+    color: 'white',
+    marginBottom: '20px',
+    fontSize: '24px',
+    marginTop: 0,
+  },
+  passwordInputField: {
+    width: '280px',
+    padding: '12px',
+    fontSize: '16px',
+    border: '2px solid #333',
+    borderRadius: '5px',
+    background: '#2a2a2a',
+    color: 'white',
+    outline: 'none',
+  },
+  passwordSubmitBtn: {
+    marginTop: '15px',
+    padding: '12px 30px',
+    fontSize: '16px',
+    background: '#4a90e2',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer',
+    marginRight: '10px',
+  },
+  passwordCancelBtn: {
+    marginTop: '15px',
+    padding: '12px 30px',
+    fontSize: '16px',
+    background: '#666',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer',
+  },
+  passwordError: {
+    color: '#ff4444',
+    marginTop: '10px',
+    fontSize: '14px',
+    minHeight: '20px',
+  },
   sidebar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
     width: '250px',
     height: '100vh',
     display: 'flex',
     flexDirection: 'column',
     borderRight: '1px solid #333',
+    zIndex: 100,
   },
   sidebarHeader: {
     padding: '15px 10px',
     fontSize: '14px',
     fontWeight: 'bold',
-    textAlign: 'center',
     borderBottom: '1px solid #333',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  closeSidebarBtn: {
+    background: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    padding: '5px',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: 'inherit',
+  },
+  hamburgerBtn: {
+    background: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    padding: '8px',
+    borderRadius: '6px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: 'inherit',
+    marginRight: '10px',
   },
   newFileBtn: {
     margin: '10px',
@@ -448,16 +639,6 @@ const styles = {
     borderRadius: '6px',
     fontSize: '14px',
     fontWeight: 'bold',
-    cursor: 'pointer',
-  },
-  authBtn: {
-    margin: '0 10px 10px',
-    padding: '10px 16px',
-    background: '#ff9800',
-    color: 'white',
-    border: 'none',
-    borderRadius: '6px',
-    fontSize: '13px',
     cursor: 'pointer',
   },
   filesList: {
@@ -499,7 +680,8 @@ const styles = {
   controlBar: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    gap: '15px',
     padding: '15px 20px',
   },
   currentFileName: {
@@ -509,6 +691,16 @@ const styles = {
   controls: {
     display: 'flex',
     gap: '8px',
+  },
+  copyBtn: {
+    padding: '10px 20px',
+    background: '#2196f3',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    cursor: 'pointer',
   },
   editBtn: {
     padding: '10px 20px',
