@@ -58,19 +58,6 @@ const DocumentEditor = () => {
     }
   };
 
-  // Simple hash function for password obfuscation
-  const simpleHash = (str) => {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    return ((hash >>> 0) * 31 + 17).toString(36);
-  };
-
-  const validHash = 'ulad1fc'; // Hash of the password
-
   // Show password overlay
   const showPasswordPrompt = () => {
     setShowPasswordOverlay(true);
@@ -83,21 +70,31 @@ const DocumentEditor = () => {
     }, 100);
   };
 
-  // Check password
-  const checkPassword = () => {
-    const hash = simpleHash(passwordInput);
-    if (hash === validHash) {
-      setAccessCode(passwordInput);
-      setIsAuthenticated(true);
-      setShowPasswordOverlay(false);
-      setPasswordError('');
-      setPasswordInput('');
-    } else {
-      setPasswordError('Incorrect password. Please try again.');
-      setPasswordInput('');
-      if (passwordInputRef.current) {
-        passwordInputRef.current.focus();
+  // Check password against API (validates against ACCESS_CODE env var)
+  const checkPassword = async () => {
+    try {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessCode: passwordInput }),
+      });
+
+      if (response.ok) {
+        setAccessCode(passwordInput);
+        setIsAuthenticated(true);
+        setShowPasswordOverlay(false);
+        setPasswordError('');
+        setPasswordInput('');
+      } else {
+        setPasswordError('Incorrect password. Please try again.');
+        setPasswordInput('');
+        if (passwordInputRef.current) {
+          passwordInputRef.current.focus();
+        }
       }
+    } catch (err) {
+      setPasswordError('Error validating password. Please try again.');
+      setPasswordInput('');
     }
   };
 
