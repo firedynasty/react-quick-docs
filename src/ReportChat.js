@@ -146,7 +146,6 @@ const DocumentEditor = () => {
     setSelectedFile(filename);
     setIsEditing(false);
     setHasUnsavedChanges(false);
-    setShowSidebar(false); // Close sidebar after selection
   };
 
   // Enter edit mode
