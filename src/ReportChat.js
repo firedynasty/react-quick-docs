@@ -143,6 +143,41 @@ const DocumentEditor = () => {
         return;
       }
     }
+
+    // Log blob information for external app integration
+    const blobKey = `docs/${filename}`;
+    const currentContent = files[filename] || '';
+    console.log('=== BLOB INFO FOR SELECTED FILE ===');
+    console.log({
+      // Key info needed to fetch/update this file
+      filename: filename,
+      blobKey: blobKey,                    // Full key in Vercel Blob storage
+
+      // API endpoints
+      fetchEndpoint: '/api/files',         // GET to fetch all files
+      saveEndpoint: '/api/files',          // POST to save/update
+
+      // Request body structure for saving/appending
+      saveRequestBody: {
+        filename: filename,
+        content: '<your_content_here>',    // Replace with actual content
+        accessCode: '<your_access_code>',  // Required for auth
+      },
+
+      // For appending to existing content
+      appendExample: {
+        filename: filename,
+        content: currentContent + '\n<appended_content>',
+        accessCode: '<your_access_code>',
+      },
+
+      // Current state
+      currentContent: currentContent,
+      contentLength: currentContent.length,
+      exists: currentContent.length > 0,
+    });
+    console.log('=== END BLOB INFO ===');
+
     setSelectedFile(filename);
     setIsEditing(false);
     setHasUnsavedChanges(false);
