@@ -16,26 +16,16 @@ const DocumentEditor = () => {
   const [fontSize, setFontSize] = useState(16);
   const [darkMode, setDarkMode] = useState(true);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [showPasswordOverlay, setShowPasswordOverlay] = useState(true); // Show on load to protect content
   const [passwordInput, setPasswordInput] = useState('');
-  const [passwordError, setPasswordError] = useState('');
   const [showSidebar, setShowSidebar] = useState(false);
 
   const textareaRef = useRef(null);
-  const passwordInputRef = useRef(null);
 
   // Load files on mount
   useEffect(() => {
     loadFiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Auto-focus password input on mount
-  useEffect(() => {
-    if (showPasswordOverlay && passwordInputRef.current) {
-      passwordInputRef.current.focus();
-    }
-  }, [showPasswordOverlay]);
 
   // Load files from API
   const loadFiles = async () => {
@@ -58,20 +48,10 @@ const DocumentEditor = () => {
     }
   };
 
-  // Show password overlay
-  const showPasswordPrompt = () => {
-    setShowPasswordOverlay(true);
-    setPasswordInput('');
-    setPasswordError('');
-    setTimeout(() => {
-      if (passwordInputRef.current) {
-        passwordInputRef.current.focus();
-      }
-    }, 100);
-  };
+  // Unlock with access code
+  const unlockAccess = async () => {
+    if (!passwordInput.trim()) return;
 
-  // Check password against API (validates against ACCESS_CODE env var)
-  const checkPassword = async () => {
     try {
       const response = await fetch('/api/auth', {
         method: 'POST',
@@ -82,18 +62,13 @@ const DocumentEditor = () => {
       if (response.ok) {
         setAccessCode(passwordInput);
         setIsAuthenticated(true);
-        setShowPasswordOverlay(false);
-        setPasswordError('');
         setPasswordInput('');
       } else {
-        setPasswordError('Incorrect password. Please try again.');
+        alert('Invalid access code');
         setPasswordInput('');
-        if (passwordInputRef.current) {
-          passwordInputRef.current.focus();
-        }
       }
     } catch (err) {
-      setPasswordError('Error validating password. Please try again.');
+      alert('Error validating access code');
       setPasswordInput('');
     }
   };
@@ -101,14 +76,14 @@ const DocumentEditor = () => {
   // Handle password input key press
   const handlePasswordKeyPress = (e) => {
     if (e.key === 'Enter') {
-      checkPassword();
+      unlockAccess();
     }
   };
 
   // Create new file
   const createNewFile = () => {
     if (!isAuthenticated) {
-      showPasswordPrompt();
+      alert('Please unlock first using the access code');
       return;
     }
 
@@ -186,7 +161,7 @@ const DocumentEditor = () => {
   // Enter edit mode
   const enterEditMode = () => {
     if (!isAuthenticated) {
-      showPasswordPrompt();
+      alert('Please unlock first using the access code');
       return;
     }
     if (!selectedFile) return;
@@ -259,7 +234,7 @@ const DocumentEditor = () => {
   // Delete file
   const deleteFile = async (filename) => {
     if (!isAuthenticated) {
-      showPasswordPrompt();
+      alert('Please unlock first using the access code');
       return;
     }
 
@@ -304,30 +279,6 @@ const DocumentEditor = () => {
 
   return (
     <div style={styles.container}>
-      {/* Password Overlay */}
-      {showPasswordOverlay && (
-        <div style={styles.passwordOverlay}>
-          <div style={styles.passwordContainer}>
-            <h2 style={styles.passwordTitle}>Enter Password</h2>
-            <input
-              ref={passwordInputRef}
-              type="password"
-              value={passwordInput}
-              onChange={(e) => setPasswordInput(e.target.value)}
-              onKeyPress={handlePasswordKeyPress}
-              placeholder="Password"
-              autoComplete="off"
-              style={styles.passwordInputField}
-            />
-            <br />
-            <button onClick={checkPassword} style={styles.passwordSubmitBtn}>
-              Submit
-            </button>
-            <div style={styles.passwordError}>{passwordError}</div>
-          </div>
-        </div>
-      )}
-
       {/* Sidebar */}
       {showSidebar && (
         <div style={{
@@ -510,6 +461,29 @@ const DocumentEditor = () => {
             >
               {darkMode ? '☀️' : '🌙'}
             </button>
+
+            {/* Unlock Input */}
+            {!isAuthenticated ? (
+              <>
+                <input
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  onKeyPress={handlePasswordKeyPress}
+                  placeholder="Access code"
+                  autoComplete="off"
+                  style={styles.unlockInput}
+                />
+                <button
+                  onClick={unlockAccess}
+                  style={styles.unlockBtn}
+                >
+                  🔓
+                </button>
+              </>
+            ) : (
+              <span style={styles.unlockedBadge}>✓ Unlocked</span>
+            )}
           </div>
         </div>
 
@@ -560,56 +534,36 @@ const styles = {
     height: '100vh',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   },
-  passwordOverlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    background: 'rgba(0, 0, 0, 0.95)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1000,
-  },
-  passwordContainer: {
-    background: '#1a1a1a',
-    padding: '40px',
-    borderRadius: '10px',
-    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
-    textAlign: 'center',
-  },
-  passwordTitle: {
-    color: 'white',
-    marginBottom: '20px',
-    fontSize: '24px',
-    marginTop: 0,
-  },
-  passwordInputField: {
-    width: '280px',
-    padding: '12px',
-    fontSize: '16px',
+  unlockInput: {
+    width: '120px',
+    padding: '8px 12px',
+    fontSize: '14px',
     border: '2px solid #333',
-    borderRadius: '5px',
+    borderRadius: '6px',
     background: '#2a2a2a',
     color: 'white',
     outline: 'none',
   },
-  passwordSubmitBtn: {
-    marginTop: '15px',
-    padding: '12px 30px',
-    fontSize: '16px',
-    background: '#4a90e2',
+  unlockBtn: {
+    width: '40px',
+    height: '40px',
+    background: '#ff9800',
     color: 'white',
     border: 'none',
-    borderRadius: '5px',
+    borderRadius: '6px',
+    fontSize: '18px',
     cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  passwordError: {
-    color: '#ff4444',
-    marginTop: '10px',
+  unlockedBadge: {
+    padding: '8px 12px',
+    background: '#4caf50',
+    color: 'white',
+    borderRadius: '6px',
     fontSize: '14px',
-    minHeight: '20px',
+    fontWeight: 'bold',
   },
   sidebar: {
     position: 'absolute',
