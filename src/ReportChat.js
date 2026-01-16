@@ -278,23 +278,21 @@ const DocumentEditor = () => {
       });
 
       if (response.ok) {
-        // Update local state
+        // Update local state immediately for instant UI update
         setFiles(prev => ({ ...prev, [selectedFile]: newContent }));
         setOriginalContent(newContent);
         setHasUnsavedChanges(false);
+        setIsSaving(false); // Stop saving state immediately
         setAppendCodeInput(''); // Clear the input
-
-        // Reload files to ensure view is updated
-        await loadFiles();
 
         alert('Clipboard content appended and saved!');
       } else {
         const data = await response.json();
         alert('Error saving: ' + (data.error || 'Unknown error'));
+        setIsSaving(false);
       }
     } catch (err) {
       alert('Error appending clipboard: ' + err.message);
-    } finally {
       setIsSaving(false);
     }
   };
