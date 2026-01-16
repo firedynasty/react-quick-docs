@@ -526,6 +526,26 @@ const DocumentEditor = () => {
               {darkMode ? '☀️' : '🌙'}
             </button>
 
+            {/* Append Clipboard Section */}
+            <input
+              type="text"
+              value={appendCodeInput}
+              onChange={(e) => setAppendCodeInput(e.target.value)}
+              placeholder="123"
+              autoComplete="off"
+              style={styles.appendInput}
+            />
+            <button
+              onClick={appendClipboard}
+              disabled={!selectedFile || !isAuthenticated || isSaving}
+              style={{
+                ...styles.appendBtn,
+                opacity: (!selectedFile || !isAuthenticated || isSaving) ? 0.5 : 1,
+              }}
+            >
+              Append
+            </button>
+
             {/* Unlock Input */}
             {!isAuthenticated ? (
               <>
@@ -548,26 +568,6 @@ const DocumentEditor = () => {
             ) : (
               <span style={styles.unlockedBadge}>✓ Unlocked</span>
             )}
-
-            {/* Append Clipboard Section */}
-            <input
-              type="text"
-              value={appendCodeInput}
-              onChange={(e) => setAppendCodeInput(e.target.value)}
-              placeholder="123"
-              autoComplete="off"
-              style={styles.appendInput}
-            />
-            <button
-              onClick={appendClipboard}
-              disabled={!selectedFile || !isAuthenticated || isSaving}
-              style={{
-                ...styles.appendBtn,
-                opacity: (!selectedFile || !isAuthenticated || isSaving) ? 0.5 : 1,
-              }}
-            >
-              Append
-            </button>
           </div>
         </div>
 
