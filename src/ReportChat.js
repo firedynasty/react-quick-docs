@@ -283,6 +283,10 @@ const DocumentEditor = () => {
         setOriginalContent(newContent);
         setHasUnsavedChanges(false);
         setAppendCodeInput(''); // Clear the input
+
+        // Reload files to ensure view is updated
+        await loadFiles();
+
         alert('Clipboard content appended and saved!');
       } else {
         const data = await response.json();
