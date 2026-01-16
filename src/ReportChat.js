@@ -552,18 +552,32 @@ const DocumentEditor = () => {
             <input
               type="text"
               value={appendCodeInput}
-              onChange={(e) => setAppendCodeInput(e.target.value)}
+              onChange={(e) => {
+                console.log('Append input changed:', e.target.value);
+                setAppendCodeInput(e.target.value);
+              }}
               placeholder="123"
               autoComplete="off"
               style={styles.appendInput}
             />
             <button
-              onClick={appendClipboard}
+              onClick={() => {
+                console.log('Append button clicked!');
+                console.log('Button state check:', {
+                  selectedFile,
+                  isAuthenticated,
+                  isSaving,
+                  appendCodeInput,
+                  disabled: !selectedFile || !isAuthenticated || isSaving
+                });
+                appendClipboard();
+              }}
               disabled={!selectedFile || !isAuthenticated || isSaving}
               style={{
                 ...styles.appendBtn,
                 opacity: (!selectedFile || !isAuthenticated || isSaving) ? 0.5 : 1,
               }}
+              title={`Debug: file=${selectedFile}, auth=${isAuthenticated}, saving=${isSaving}`}
             >
               Append
             </button>
