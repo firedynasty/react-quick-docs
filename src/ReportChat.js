@@ -234,6 +234,12 @@ const DocumentEditor = () => {
 
   // Append clipboard to current document
   const appendClipboard = async () => {
+    console.log('=== APPEND DEBUG ===');
+    console.log('appendCodeInput:', appendCodeInput);
+    console.log('selectedFile:', selectedFile);
+    console.log('isAuthenticated:', isAuthenticated);
+    console.log('isSaving:', isSaving);
+
     // Validate code
     if (appendCodeInput !== '123') {
       alert('Invalid code');
@@ -255,6 +261,7 @@ const DocumentEditor = () => {
     try {
       // Read clipboard
       const clipboardText = await navigator.clipboard.readText();
+      console.log('Clipboard text length:', clipboardText?.length);
 
       if (!clipboardText) {
         alert('Clipboard is empty');
@@ -264,9 +271,13 @@ const DocumentEditor = () => {
       // Get current content
       const currentContent = files[selectedFile] || '';
       const newContent = currentContent + '\n' + clipboardText;
+      console.log('Current content length:', currentContent.length);
+      console.log('New content length:', newContent.length);
 
       // Save to API
       setIsSaving(true);
+      console.log('Set isSaving to true, calling API...');
+
       const response = await fetch('/api/files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -277,24 +288,33 @@ const DocumentEditor = () => {
         }),
       });
 
+      console.log('API response status:', response.status);
+
       if (response.ok) {
         // Update local state immediately for instant UI update
         setFiles(prev => ({ ...prev, [selectedFile]: newContent }));
         setOriginalContent(newContent);
         setHasUnsavedChanges(false);
         setIsSaving(false); // Stop saving state immediately
+        console.log('Set isSaving to false');
         setAppendCodeInput(''); // Clear the input
+        console.log('Cleared appendCodeInput');
 
         alert('Clipboard content appended and saved!');
       } else {
         const data = await response.json();
         alert('Error saving: ' + (data.error || 'Unknown error'));
         setIsSaving(false);
+        console.log('Set isSaving to false (error)');
       }
     } catch (err) {
+      console.error('Error in appendClipboard:', err);
       alert('Error appending clipboard: ' + err.message);
       setIsSaving(false);
+      console.log('Set isSaving to false (catch)');
     }
+
+    console.log('=== APPEND DEBUG END ===');
   };
 
   // Delete file
