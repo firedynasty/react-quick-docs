@@ -18,6 +18,7 @@ const DocumentEditor = () => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [showSidebar, setShowSidebar] = useState(false);
+  const [appendCodeInput, setAppendCodeInput] = useState('');
 
   const textareaRef = useRef(null);
 
@@ -226,6 +227,69 @@ const DocumentEditor = () => {
       }
     } catch (err) {
       alert('Error saving: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Append clipboard to current document
+  const appendClipboard = async () => {
+    // Validate code
+    if (appendCodeInput !== '123') {
+      alert('Invalid code');
+      return;
+    }
+
+    // Check if a file is selected
+    if (!selectedFile) {
+      alert('Please select a file first');
+      return;
+    }
+
+    // Check if authenticated
+    if (!isAuthenticated) {
+      alert('Please unlock first using the access code');
+      return;
+    }
+
+    try {
+      // Read clipboard
+      const clipboardText = await navigator.clipboard.readText();
+
+      if (!clipboardText) {
+        alert('Clipboard is empty');
+        return;
+      }
+
+      // Get current content
+      const currentContent = files[selectedFile] || '';
+      const newContent = currentContent + '\n' + clipboardText;
+
+      // Save to API
+      setIsSaving(true);
+      const response = await fetch('/api/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: selectedFile,
+          content: newContent,
+          accessCode: accessCode,
+        }),
+      });
+
+      if (response.ok) {
+        // Update local state
+        setFiles(prev => ({ ...prev, [selectedFile]: newContent }));
+        setOriginalContent(newContent);
+        setHasUnsavedChanges(false);
+        setAppendCodeInput(''); // Clear the input
+        alert('Clipboard content appended and saved!');
+      } else {
+        const data = await response.json();
+        alert('Error saving: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Error appending clipboard: ' + err.message);
     } finally {
       setIsSaving(false);
     }
@@ -484,6 +548,26 @@ const DocumentEditor = () => {
             ) : (
               <span style={styles.unlockedBadge}>✓ Unlocked</span>
             )}
+
+            {/* Append Clipboard Section */}
+            <input
+              type="text"
+              value={appendCodeInput}
+              onChange={(e) => setAppendCodeInput(e.target.value)}
+              placeholder="123"
+              autoComplete="off"
+              style={styles.appendInput}
+            />
+            <button
+              onClick={appendClipboard}
+              disabled={!selectedFile || !isAuthenticated || isSaving}
+              style={{
+                ...styles.appendBtn,
+                opacity: (!selectedFile || !isAuthenticated || isSaving) ? 0.5 : 1,
+              }}
+            >
+              Append
+            </button>
           </div>
         </div>
 
@@ -564,6 +648,26 @@ const styles = {
     borderRadius: '6px',
     fontSize: '14px',
     fontWeight: 'bold',
+  },
+  appendInput: {
+    width: '80px',
+    padding: '8px 12px',
+    fontSize: '14px',
+    border: '2px solid #ff9800',
+    borderRadius: '6px',
+    background: '#2a2a2a',
+    color: 'white',
+    outline: 'none',
+  },
+  appendBtn: {
+    padding: '10px 16px',
+    background: '#ff5722',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    cursor: 'pointer',
   },
   sidebar: {
     position: 'absolute',
