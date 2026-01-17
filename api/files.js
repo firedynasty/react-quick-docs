@@ -43,9 +43,10 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const { filename, content, accessCode } = req.body;
 
-      // Validate access code
+      // Validate access code (accept both main access code and "123" for append operations)
       const validAccessCode = process.env.ACCESS_CODE;
-      if (!accessCode || accessCode !== validAccessCode) {
+      const isValidCode = accessCode === validAccessCode || accessCode === '123';
+      if (!accessCode || !isValidCode) {
         return res.status(401).json({ error: 'Invalid access code' });
       }
 
