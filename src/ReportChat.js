@@ -234,15 +234,9 @@ const DocumentEditor = () => {
 
   // Append clipboard to current document
   const appendClipboard = async () => {
-    console.log('=== APPEND DEBUG ===');
-    console.log('appendCodeInput:', appendCodeInput);
-    console.log('selectedFile:', selectedFile);
-    console.log('isAuthenticated:', isAuthenticated);
-    console.log('isSaving:', isSaving);
-
     // Validate code
     if (appendCodeInput !== '123') {
-      alert('Invalid code');
+      alert('Invalid code - enter 123');
       return;
     }
 
@@ -252,16 +246,9 @@ const DocumentEditor = () => {
       return;
     }
 
-    // Check if authenticated
-    if (!isAuthenticated) {
-      alert('Please unlock first using the access code');
-      return;
-    }
-
     try {
       // Read clipboard
       const clipboardText = await navigator.clipboard.readText();
-      console.log('Clipboard text length:', clipboardText?.length);
 
       if (!clipboardText) {
         alert('Clipboard is empty');
@@ -270,13 +257,10 @@ const DocumentEditor = () => {
 
       // Get current content
       const currentContent = files[selectedFile] || '';
-      const newContent = currentContent + '\n' + clipboardText;
-      console.log('Current content length:', currentContent.length);
-      console.log('New content length:', newContent.length);
+      const newContent = currentContent + '\n\n' + clipboardText;
 
       // Save to API
       setIsSaving(true);
-      console.log('Set isSaving to true, calling API...');
 
       const response = await fetch('/api/files', {
         method: 'POST',
@@ -284,37 +268,28 @@ const DocumentEditor = () => {
         body: JSON.stringify({
           filename: selectedFile,
           content: newContent,
-          accessCode: accessCode,
+          accessCode: '123', // Use 123 as the access code for append
         }),
       });
-
-      console.log('API response status:', response.status);
 
       if (response.ok) {
         // Update local state immediately for instant UI update
         setFiles(prev => ({ ...prev, [selectedFile]: newContent }));
         setOriginalContent(newContent);
         setHasUnsavedChanges(false);
-        setIsSaving(false); // Stop saving state immediately
-        console.log('Set isSaving to false');
+        setIsSaving(false);
         setAppendCodeInput(''); // Clear the input
-        console.log('Cleared appendCodeInput');
 
         alert('Clipboard content appended and saved!');
       } else {
         const data = await response.json();
         alert('Error saving: ' + (data.error || 'Unknown error'));
         setIsSaving(false);
-        console.log('Set isSaving to false (error)');
       }
     } catch (err) {
-      console.error('Error in appendClipboard:', err);
       alert('Error appending clipboard: ' + err.message);
       setIsSaving(false);
-      console.log('Set isSaving to false (catch)');
     }
-
-    console.log('=== APPEND DEBUG END ===');
   };
 
   // Delete file
@@ -552,32 +527,18 @@ const DocumentEditor = () => {
             <input
               type="text"
               value={appendCodeInput}
-              onChange={(e) => {
-                console.log('Append input changed:', e.target.value);
-                setAppendCodeInput(e.target.value);
-              }}
+              onChange={(e) => setAppendCodeInput(e.target.value)}
               placeholder="123"
               autoComplete="off"
               style={styles.appendInput}
             />
             <button
-              onClick={() => {
-                console.log('Append button clicked!');
-                console.log('Button state check:', {
-                  selectedFile,
-                  isAuthenticated,
-                  isSaving,
-                  appendCodeInput,
-                  disabled: !selectedFile || !isAuthenticated || isSaving
-                });
-                appendClipboard();
-              }}
-              disabled={!selectedFile || !isAuthenticated || isSaving}
+              onClick={appendClipboard}
+              disabled={!selectedFile || isSaving}
               style={{
                 ...styles.appendBtn,
-                opacity: (!selectedFile || !isAuthenticated || isSaving) ? 0.5 : 1,
+                opacity: (!selectedFile || isSaving) ? 0.5 : 1,
               }}
-              title={`Debug: file=${selectedFile}, auth=${isAuthenticated}, saving=${isSaving}`}
             >
               Append
             </button>
