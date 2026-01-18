@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTTS } from './hooks/useTTS';
 
 const DocumentEditor = () => {
   // Files state
@@ -22,24 +23,59 @@ const DocumentEditor = () => {
 
   const textareaRef = useRef(null);
 
+  // TTS hook
+  const tts = useTTS();
+
+  // Load text into TTS when file selection changes
+  useEffect(() => {
+    if (selectedFile && files[selectedFile]) {
+      tts.loadText(files[selectedFile]);
+    } else {
+      tts.loadText('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFile, files[selectedFile]]);
+
+  // Check if running on localhost
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+  // Auto-authenticate on localhost
+  useEffect(() => {
+    if (isLocalhost) {
+      setIsAuthenticated(true);
+      setAccessCode('localhost');
+    }
+  }, [isLocalhost]);
+
   // Load files on mount
   useEffect(() => {
     loadFiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load files from API
+  // Load files from API or localStorage
   const loadFiles = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/files');
-      if (response.ok) {
-        const data = await response.json();
-        setFiles(data.files || {});
-        // Auto-select first file if none selected
-        const filenames = Object.keys(data.files || {});
+      if (isLocalhost) {
+        // Use localStorage on localhost
+        const storedFiles = localStorage.getItem('localFiles');
+        const localFiles = storedFiles ? JSON.parse(storedFiles) : {};
+        setFiles(localFiles);
+        const filenames = Object.keys(localFiles);
         if (filenames.length > 0 && !selectedFile) {
           setSelectedFile(filenames[0]);
+        }
+      } else {
+        const response = await fetch('/api/files');
+        if (response.ok) {
+          const data = await response.json();
+          setFiles(data.files || {});
+          // Auto-select first file if none selected
+          const filenames = Object.keys(data.files || {});
+          if (filenames.length > 0 && !selectedFile) {
+            setSelectedFile(filenames[0]);
+          }
         }
       }
     } catch (err) {
@@ -83,7 +119,7 @@ const DocumentEditor = () => {
 
   // Create new file
   const createNewFile = () => {
-    if (!isAuthenticated) {
+    if (!isLocalhost && !isAuthenticated) {
       alert('Please unlock first using the access code');
       return;
     }
@@ -104,7 +140,11 @@ const DocumentEditor = () => {
     }
 
     // Add new file locally
-    setFiles(prev => ({ ...prev, [finalName]: '' }));
+    const newFiles = { ...files, [finalName]: '' };
+    setFiles(newFiles);
+    if (isLocalhost) {
+      localStorage.setItem('localFiles', JSON.stringify(newFiles));
+    }
     setSelectedFile(finalName);
     setEditContent('');
     setOriginalContent('');
@@ -198,32 +238,44 @@ const DocumentEditor = () => {
     setHasUnsavedChanges(newContent !== originalContent);
   };
 
-  // Save file to API
+  // Save file to API or localStorage
   const saveFile = async () => {
-    if (!selectedFile || !accessCode) return;
+    if (!selectedFile) return;
+    if (!isLocalhost && !accessCode) return;
 
     setIsSaving(true);
     try {
-      const response = await fetch('/api/files', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filename: selectedFile,
-          content: editContent,
-          accessCode: accessCode,
-        }),
-      });
-
-      if (response.ok) {
-        // Update local state
-        setFiles(prev => ({ ...prev, [selectedFile]: editContent }));
+      if (isLocalhost) {
+        // Save to localStorage on localhost
+        const newFiles = { ...files, [selectedFile]: editContent };
+        localStorage.setItem('localFiles', JSON.stringify(newFiles));
+        setFiles(newFiles);
         setOriginalContent(editContent);
         setHasUnsavedChanges(false);
         setIsEditing(false);
-        alert('File saved!');
+        alert('File saved locally!');
       } else {
-        const data = await response.json();
-        alert('Error saving: ' + (data.error || 'Unknown error'));
+        const response = await fetch('/api/files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: selectedFile,
+            content: editContent,
+            accessCode: accessCode,
+          }),
+        });
+
+        if (response.ok) {
+          // Update local state
+          setFiles(prev => ({ ...prev, [selectedFile]: editContent }));
+          setOriginalContent(editContent);
+          setHasUnsavedChanges(false);
+          setIsEditing(false);
+          alert('File saved!');
+        } else {
+          const data = await response.json();
+          alert('Error saving: ' + (data.error || 'Unknown error'));
+        }
       }
     } catch (err) {
       alert('Error saving: ' + err.message);
@@ -234,8 +286,8 @@ const DocumentEditor = () => {
 
   // Append clipboard to current document
   const appendClipboard = async () => {
-    // Validate code
-    if (appendCodeInput !== '123') {
+    // Validate code (skip on localhost)
+    if (!isLocalhost && appendCodeInput !== '123') {
       alert('Invalid code - enter 123');
       return;
     }
@@ -259,32 +311,43 @@ const DocumentEditor = () => {
       const currentContent = files[selectedFile] || '';
       const newContent = currentContent + '\n\n' + clipboardText;
 
-      // Save to API
       setIsSaving(true);
 
-      const response = await fetch('/api/files', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filename: selectedFile,
-          content: newContent,
-          accessCode: '123', // Use 123 as the access code for append
-        }),
-      });
-
-      if (response.ok) {
-        // Update local state immediately for instant UI update
-        setFiles(prev => ({ ...prev, [selectedFile]: newContent }));
+      if (isLocalhost) {
+        // Save to localStorage on localhost
+        const newFiles = { ...files, [selectedFile]: newContent };
+        localStorage.setItem('localFiles', JSON.stringify(newFiles));
+        setFiles(newFiles);
         setOriginalContent(newContent);
         setHasUnsavedChanges(false);
         setIsSaving(false);
-        setAppendCodeInput(''); // Clear the input
-
-        alert('Clipboard content appended and saved!');
+        setAppendCodeInput('');
+        alert('Clipboard content appended locally!');
       } else {
-        const data = await response.json();
-        alert('Error saving: ' + (data.error || 'Unknown error'));
-        setIsSaving(false);
+        const response = await fetch('/api/files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: selectedFile,
+            content: newContent,
+            accessCode: '123', // Use 123 as the access code for append
+          }),
+        });
+
+        if (response.ok) {
+          // Update local state immediately for instant UI update
+          setFiles(prev => ({ ...prev, [selectedFile]: newContent }));
+          setOriginalContent(newContent);
+          setHasUnsavedChanges(false);
+          setIsSaving(false);
+          setAppendCodeInput(''); // Clear the input
+
+          alert('Clipboard content appended and saved!');
+        } else {
+          const data = await response.json();
+          alert('Error saving: ' + (data.error || 'Unknown error'));
+          setIsSaving(false);
+        }
       }
     } catch (err) {
       alert('Error appending clipboard: ' + err.message);
@@ -294,7 +357,7 @@ const DocumentEditor = () => {
 
   // Delete file
   const deleteFile = async (filename) => {
-    if (!isAuthenticated) {
+    if (!isLocalhost && !isAuthenticated) {
       alert('Please unlock first using the access code');
       return;
     }
@@ -302,26 +365,39 @@ const DocumentEditor = () => {
     if (!window.confirm(`Delete "${filename}"?`)) return;
 
     try {
-      const response = await fetch(`/api/files?filename=${encodeURIComponent(filename)}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessCode }),
-      });
-
-      if (response.ok) {
-        setFiles(prev => {
-          const newFiles = { ...prev };
-          delete newFiles[filename];
-          return newFiles;
-        });
+      if (isLocalhost) {
+        // Delete from localStorage on localhost
+        const newFiles = { ...files };
+        delete newFiles[filename];
+        localStorage.setItem('localFiles', JSON.stringify(newFiles));
+        setFiles(newFiles);
         if (selectedFile === filename) {
-          const remaining = Object.keys(files).filter(f => f !== filename);
+          const remaining = Object.keys(newFiles);
           setSelectedFile(remaining[0] || null);
         }
         setIsEditing(false);
       } else {
-        const data = await response.json();
-        alert('Error deleting: ' + (data.error || 'Unknown error'));
+        const response = await fetch(`/api/files?filename=${encodeURIComponent(filename)}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessCode }),
+        });
+
+        if (response.ok) {
+          setFiles(prev => {
+            const newFiles = { ...prev };
+            delete newFiles[filename];
+            return newFiles;
+          });
+          if (selectedFile === filename) {
+            const remaining = Object.keys(files).filter(f => f !== filename);
+            setSelectedFile(remaining[0] || null);
+          }
+          setIsEditing(false);
+        } else {
+          const data = await response.json();
+          alert('Error deleting: ' + (data.error || 'Unknown error'));
+        }
       }
     } catch (err) {
       alert('Error deleting: ' + err.message);
@@ -565,6 +641,85 @@ const DocumentEditor = () => {
             ) : (
               <span style={styles.unlockedBadge}>✓ Unlocked</span>
             )}
+
+            {/* TTS Controls - Compact */}
+            <div style={styles.ttsControls}>
+              <span style={styles.ttsHint}>highlight & ▶ ✔</span>
+              <button
+                onClick={tts.prevSentence}
+                disabled={tts.currentSentenceIndex === 0}
+                style={styles.ttsNavBtn}
+                title="Previous [">
+                [
+              </button>
+              <span style={styles.ttsIndicator}>{tts.sentenceIndicator}</span>
+              <button
+                onClick={tts.nextSentence}
+                disabled={tts.currentSentenceIndex >= tts.sentences.length - 1}
+                style={styles.ttsNavBtn}
+                title="Next ]">
+                ]
+              </button>
+              <button
+                onClick={() => {
+                  if (tts.isPlaying) {
+                    tts.stop();
+                  } else {
+                    const selection = window.getSelection().toString().trim();
+                    if (selection && selection.length > 1) {
+                      const found = tts.playFromSelection(selection);
+                      if (!found) tts.play();
+                    } else {
+                      tts.play();
+                    }
+                  }
+                }}
+                style={styles.ttsPlayBtn}
+                title={tts.isPlaying ? 'Stop' : 'Play'}>
+                {tts.isPlaying ? '⏹' : '▶'}
+              </button>
+              <select
+                value={tts.speed}
+                onChange={(e) => tts.setSpeed(parseFloat(e.target.value))}
+                style={styles.ttsSelect}
+                title="Speed">
+                <option value="0.5">0.5x</option>
+                <option value="0.75">0.75x</option>
+                <option value="1">1x</option>
+                <option value="1.25">1.25x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2">2x</option>
+              </select>
+              <select
+                value={tts.language}
+                onChange={(e) => tts.setLanguage(e.target.value)}
+                style={styles.ttsSelect}
+                title="Language">
+                <option value="en-US">EN</option>
+                <option value="zh-HK">粵</option>
+                <option value="zh-CN">普</option>
+                <option value="es-ES">ES</option>
+                <option value="he-IL">HE</option>
+                <option value="ko-KR">KO</option>
+              </select>
+              <input
+                type="number"
+                value={tts.sentenceCount}
+                onChange={(e) => tts.setSentenceCount(Math.max(1, parseInt(e.target.value) || 1))}
+                min="1"
+                style={styles.ttsCountInput}
+                title="Sentences to read"
+              />
+              <button
+                onClick={() => tts.setRepeatMode(tts.repeatMode === 'continue' ? 'repeat' : 'continue')}
+                style={{
+                  ...styles.ttsRepeatBtn,
+                  background: tts.repeatMode === 'repeat' ? '#ff9800' : '#555',
+                }}
+                title={tts.repeatMode === 'continue' ? 'Mode: Continue' : 'Mode: Repeat'}>
+                {tts.repeatMode === 'continue' ? '→' : '↻'}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -616,53 +771,53 @@ const styles = {
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   },
   unlockInput: {
-    width: '120px',
-    padding: '8px 12px',
-    fontSize: '14px',
-    border: '2px solid #333',
-    borderRadius: '6px',
+    width: '80px',
+    padding: '5px 8px',
+    fontSize: '12px',
+    border: '1px solid #333',
+    borderRadius: '4px',
     background: '#2a2a2a',
     color: 'white',
     outline: 'none',
   },
   unlockBtn: {
-    width: '40px',
-    height: '40px',
+    width: '28px',
+    height: '28px',
     background: '#ff9800',
     color: 'white',
     border: 'none',
-    borderRadius: '6px',
-    fontSize: '18px',
+    borderRadius: '4px',
+    fontSize: '14px',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
   },
   unlockedBadge: {
-    padding: '8px 12px',
+    padding: '4px 8px',
     background: '#4caf50',
     color: 'white',
-    borderRadius: '6px',
-    fontSize: '14px',
+    borderRadius: '4px',
+    fontSize: '11px',
     fontWeight: 'bold',
   },
   appendInput: {
-    width: '80px',
-    padding: '8px 12px',
-    fontSize: '14px',
-    border: '2px solid #ff9800',
-    borderRadius: '6px',
+    width: '50px',
+    padding: '5px 8px',
+    fontSize: '12px',
+    border: '1px solid #ff9800',
+    borderRadius: '4px',
     background: '#2a2a2a',
     color: 'white',
     outline: 'none',
   },
   appendBtn: {
-    padding: '10px 16px',
+    padding: '6px 10px',
     background: '#ff5722',
     color: 'white',
     border: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
+    borderRadius: '4px',
+    fontSize: '11px',
     fontWeight: 'bold',
     cursor: 'pointer',
   },
@@ -760,8 +915,9 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    gap: '15px',
-    padding: '15px 20px',
+    gap: '8px',
+    padding: '8px 12px',
+    flexWrap: 'wrap',
   },
   currentFileName: {
     fontSize: '16px',
@@ -769,65 +925,67 @@ const styles = {
   },
   controls: {
     display: 'flex',
-    gap: '8px',
+    gap: '6px',
+    flexWrap: 'wrap',
+    alignItems: 'center',
   },
   copyBtn: {
-    padding: '10px 20px',
+    padding: '6px 12px',
     background: '#2196f3',
     color: 'white',
     border: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
+    borderRadius: '4px',
+    fontSize: '12px',
     fontWeight: 'bold',
     cursor: 'pointer',
   },
   editBtn: {
-    padding: '10px 20px',
+    padding: '6px 12px',
     background: '#9c27b0',
     color: 'white',
     border: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
+    borderRadius: '4px',
+    fontSize: '12px',
     fontWeight: 'bold',
     cursor: 'pointer',
   },
   saveBtn: {
-    padding: '10px 20px',
+    padding: '6px 12px',
     background: '#4caf50',
     color: 'white',
     border: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
+    borderRadius: '4px',
+    fontSize: '12px',
     fontWeight: 'bold',
     cursor: 'pointer',
   },
   cancelBtn: {
-    padding: '10px 20px',
+    padding: '6px 12px',
     background: '#f44336',
     color: 'white',
     border: 'none',
-    borderRadius: '6px',
-    fontSize: '14px',
+    borderRadius: '4px',
+    fontSize: '12px',
     fontWeight: 'bold',
     cursor: 'pointer',
   },
   deleteBtn: {
-    padding: '10px 16px',
+    padding: '6px 10px',
     background: '#e91e63',
     color: 'white',
     border: 'none',
-    borderRadius: '6px',
-    fontSize: '13px',
+    borderRadius: '4px',
+    fontSize: '11px',
     cursor: 'pointer',
   },
   fontBtn: {
-    width: '40px',
-    height: '40px',
+    width: '28px',
+    height: '28px',
     background: '#4da6ff',
     color: 'white',
     border: 'none',
-    borderRadius: '6px',
-    fontSize: '18px',
+    borderRadius: '4px',
+    fontSize: '14px',
     fontWeight: 'bold',
     cursor: 'pointer',
     display: 'flex',
@@ -836,7 +994,7 @@ const styles = {
   },
   contentArea: {
     flex: 1,
-    padding: '20px',
+    padding: '10px',
     overflow: 'hidden',
   },
   emptyState: {
@@ -849,9 +1007,9 @@ const styles = {
   textarea: {
     width: '100%',
     height: '100%',
-    padding: '20px',
+    padding: '12px',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: '6px',
     resize: 'none',
     fontFamily: "'Courier New', monospace",
     lineHeight: '1.6',
@@ -859,8 +1017,8 @@ const styles = {
   },
   viewerContent: {
     height: '100%',
-    padding: '20px',
-    borderRadius: '8px',
+    padding: '12px',
+    borderRadius: '6px',
     overflow: 'auto',
   },
   preContent: {
@@ -869,6 +1027,85 @@ const styles = {
     wordWrap: 'break-word',
     fontFamily: "'Courier New', monospace",
     lineHeight: '1.6',
+  },
+  // TTS Styles
+  ttsControls: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    marginLeft: '8px',
+    padding: '4px 8px',
+    background: 'rgba(50, 50, 50, 0.8)',
+    borderRadius: '4px',
+  },
+  ttsHint: {
+    fontSize: '10px',
+    color: '#8bc34a',
+    marginRight: '4px',
+    fontStyle: 'italic',
+  },
+  ttsNavBtn: {
+    width: '24px',
+    height: '24px',
+    background: '#555',
+    color: 'white',
+    border: 'none',
+    borderRadius: '3px',
+    fontSize: '14px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ttsIndicator: {
+    fontSize: '11px',
+    color: '#aaa',
+    minWidth: '40px',
+    textAlign: 'center',
+  },
+  ttsPlayBtn: {
+    width: '28px',
+    height: '24px',
+    background: '#4caf50',
+    color: 'white',
+    border: 'none',
+    borderRadius: '3px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ttsSelect: {
+    padding: '3px 4px',
+    fontSize: '11px',
+    background: '#333',
+    color: 'white',
+    border: '1px solid #555',
+    borderRadius: '3px',
+    cursor: 'pointer',
+  },
+  ttsCountInput: {
+    width: '32px',
+    padding: '3px 4px',
+    fontSize: '11px',
+    background: '#333',
+    color: 'white',
+    border: '1px solid #555',
+    borderRadius: '3px',
+    textAlign: 'center',
+  },
+  ttsRepeatBtn: {
+    width: '24px',
+    height: '24px',
+    color: 'white',
+    border: 'none',
+    borderRadius: '3px',
+    fontSize: '14px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 };
 

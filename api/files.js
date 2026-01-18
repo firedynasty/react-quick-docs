@@ -43,9 +43,13 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const { filename, content, accessCode } = req.body;
 
-      // Validate access code (accept both main access code and "123" for append operations)
+      // Check if request is from localhost
+      const origin = req.headers.origin || req.headers.referer || '';
+      const isFromLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+
+      // Validate access code (accept main access code, "123" for append, or "localhost" for local dev)
       const validAccessCode = process.env.ACCESS_CODE;
-      const isValidCode = accessCode === validAccessCode || accessCode === '123';
+      const isValidCode = accessCode === validAccessCode || accessCode === '123' || (accessCode === 'localhost' && isFromLocalhost);
       if (!accessCode || !isValidCode) {
         return res.status(401).json({ error: 'Invalid access code' });
       }
@@ -74,9 +78,14 @@ export default async function handler(req, res) {
       const { filename } = req.query;
       const { accessCode } = req.body || {};
 
+      // Check if request is from localhost
+      const origin = req.headers.origin || req.headers.referer || '';
+      const isFromLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+
       // Validate access code
       const validAccessCode = process.env.ACCESS_CODE;
-      if (!accessCode || accessCode !== validAccessCode) {
+      const isValidCode = accessCode === validAccessCode || (accessCode === 'localhost' && isFromLocalhost);
+      if (!accessCode || !isValidCode) {
         return res.status(401).json({ error: 'Invalid access code' });
       }
 

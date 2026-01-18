@@ -16,7 +16,14 @@ export default async function handler(req, res) {
     const { accessCode } = req.body;
     const validAccessCode = process.env.ACCESS_CODE;
 
-    if (accessCode && accessCode === validAccessCode) {
+    // Check if request is from localhost
+    const origin = req.headers.origin || req.headers.referer || '';
+    const isFromLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+
+    // Accept valid access code or 'localhost' from localhost origin
+    const isValidCode = (accessCode && accessCode === validAccessCode) || (accessCode === 'localhost' && isFromLocalhost);
+
+    if (isValidCode) {
       return res.status(200).json({ success: true });
     } else {
       return res.status(401).json({ error: 'Invalid access code' });
